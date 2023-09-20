@@ -370,7 +370,7 @@ void TileMapLayer::_rendering_update() {
 					}
 
 					// Drawing the tile in the canvas item.
-					tile_map_node->draw_tile(ci, local_tile_pos - ci_position, tile_set, cell_data.cell.source_id, cell_data.cell.get_atlas_coords(), cell_data.cell.alternative_tile, -1, tile_map_node->get_self_modulate(), tile_data, random_animation_offset);
+					tile_map_node->draw_tile(ci, local_tile_pos - ci_position, tile_set, cell_data.cell.source_id, cell_data.cell.get_atlas_coords(), cell_data.cell.alternative_tile, &cell_data, -1, tile_map_node->get_self_modulate(), tile_data, random_animation_offset);
 				}
 			} else {
 				// Free the quadrant.
@@ -1991,7 +1991,7 @@ void TileMapLayer::internal_update() {
 	dirty.cell_list.clear();
 }
 
-void TileMapLayer::set_cell(const Vector2i &p_coords, int p_source_id, const Vector2i p_atlas_coords, int p_alternative_tile) {
+void TileMapLayer::set_cell(const Vector2i &p_coords, int p_source_id, const Vector2i p_atlas_coords, int p_alternative_tile, const Color p_cell_modulate) {
 	// Set the current cell tile (using integer position).
 	Vector2i pk(p_coords);
 	HashMap<Vector2i, CellData>::Iterator E = tile_map.find(pk);
@@ -2015,9 +2015,10 @@ void TileMapLayer::set_cell(const Vector2i &p_coords, int p_source_id, const Vec
 		// Insert a new cell in the tile map.
 		CellData new_cell_data;
 		new_cell_data.coords = pk;
+		new_cell_data.modulate = p_cell_modulate;
 		E = tile_map.insert(pk, new_cell_data);
 	} else {
-		if (E->value.cell.source_id == source_id && E->value.cell.get_atlas_coords() == atlas_coords && E->value.cell.alternative_tile == alternative_tile) {
+		if (E->value.cell.source_id == source_id && E->value.cell.get_atlas_coords() == atlas_coords && E->value.cell.alternative_tile == alternative_tile && E->value.modulate == p_cell_modulate) {
 			return; // Nothing changed.
 		}
 	}
@@ -2026,6 +2027,29 @@ void TileMapLayer::set_cell(const Vector2i &p_coords, int p_source_id, const Vec
 	c.source_id = source_id;
 	c.set_atlas_coords(atlas_coords);
 	c.alternative_tile = alternative_tile;
+	E->value.modulate = p_cell_modulate;
+
+	// Make the given cell dirty.
+	if (!E->value.dirty_list_element.in_list()) {
+		dirty.cell_list.add(&(E->value.dirty_list_element));
+	}
+	tile_map_node->queue_internal_update();
+
+	used_rect_cache_dirty = true;
+}
+
+void TileMapLayer::set_cell_modulate(const Vector2i& p_coords, const Color& p_cell_modulate) {
+	// Set the current cell color
+	Vector2i pk(p_coords);
+	HashMap<Vector2i, CellData>::Iterator E = tile_map.find(pk);
+
+	if (!E) {
+		return; // Nothing to do, the tile is empty.
+	} else if (E->value.modulate == p_cell_modulate) {
+		return; // Nothing changed.
+	}
+
+	E->value.modulate = p_cell_modulate;
 
 	// Make the given cell dirty.
 	if (!E->value.dirty_list_element.in_list()) {
@@ -3057,7 +3081,7 @@ int TileMap::get_rendering_quadrant_size() const {
 	return rendering_quadrant_size;
 }
 
-void TileMap::draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, int p_frame, Color p_modulation, const TileData *p_tile_data_override, real_t p_animation_offset) {
+void TileMap::draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, const CellData *p_cell_data, int p_frame, Color p_modulation, const TileData *p_tile_data_override, real_t p_animation_offset) {
 	ERR_FAIL_COND(!p_tile_set.is_valid());
 	ERR_FAIL_COND(!p_tile_set->has_source(p_atlas_source_id));
 	ERR_FAIL_COND(!p_tile_set->get_source(p_atlas_source_id)->has_tile(p_atlas_coords));
@@ -3110,6 +3134,11 @@ void TileMap::draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<
 
 		if (tile_data->get_flip_v() ^ bool(p_alternative_tile & TileSetAtlasSource::TRANSFORM_FLIP_V)) {
 			dest_rect.size.y = -dest_rect.size.y;
+		}
+
+		// Apply cell data
+		if (p_cell_data) {
+			modulate *= p_cell_data->modulate;
 		}
 
 		// Draw the tile.
@@ -3322,8 +3351,12 @@ void TileMap::set_y_sort_enabled(bool p_enable) {
 	update_configuration_warnings();
 }
 
-void TileMap::set_cell(int p_layer, const Vector2i &p_coords, int p_source_id, const Vector2i p_atlas_coords, int p_alternative_tile) {
-	TILEMAP_CALL_FOR_LAYER(p_layer, set_cell, p_coords, p_source_id, p_atlas_coords, p_alternative_tile);
+void TileMap::set_cell(int p_layer, const Vector2i &p_coords, int p_source_id, const Vector2i p_atlas_coords, int p_alternative_tile, const Color p_cell_modulate) {
+	TILEMAP_CALL_FOR_LAYER(p_layer, set_cell, p_coords, p_source_id, p_atlas_coords, p_alternative_tile, p_cell_modulate);
+}
+
+void TileMap::set_cell_modulate(int p_layer, const Vector2i& p_coords, const Color& p_cell_modulate) {
+	TILEMAP_CALL_FOR_LAYER(p_layer, set_cell_modulate, p_coords, p_cell_modulate);
 }
 
 void TileMap::erase_cell(int p_layer, const Vector2i &p_coords) {
@@ -4559,7 +4592,8 @@ void TileMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_navigation_visibility_mode", "navigation_visibility_mode"), &TileMap::set_navigation_visibility_mode);
 	ClassDB::bind_method(D_METHOD("get_navigation_visibility_mode"), &TileMap::get_navigation_visibility_mode);
 
-	ClassDB::bind_method(D_METHOD("set_cell", "layer", "coords", "source_id", "atlas_coords", "alternative_tile"), &TileMap::set_cell, DEFVAL(TileSet::INVALID_SOURCE), DEFVAL(TileSetSource::INVALID_ATLAS_COORDS), DEFVAL(0));
+	ClassDB::bind_method(D_METHOD("set_cell", "layer", "coords", "source_id", "atlas_coords", "alternative_tile", "modulate"), &TileMap::set_cell, DEFVAL(TileSet::INVALID_SOURCE), DEFVAL(TileSetSource::INVALID_ATLAS_COORDS), DEFVAL(0), DEFVAL(Color(1, 1, 1)));
+	ClassDB::bind_method(D_METHOD("set_cell_modulate", "layer", "coords", "modulate"), &TileMap::set_cell_modulate);
 	ClassDB::bind_method(D_METHOD("erase_cell", "layer", "coords"), &TileMap::erase_cell);
 	ClassDB::bind_method(D_METHOD("get_cell_source_id", "layer", "coords", "use_proxies"), &TileMap::get_cell_source_id, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("get_cell_atlas_coords", "layer", "coords", "use_proxies"), &TileMap::get_cell_atlas_coords, DEFVAL(false));

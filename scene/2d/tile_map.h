@@ -97,6 +97,7 @@ class RenderingQuadrant;
 struct CellData {
 	Vector2i coords;
 	TileMapCell cell;
+	Color modulate;
 
 	// Debug.
 	SelfList<CellData> debug_quadrant_list_element;
@@ -125,6 +126,7 @@ struct CellData {
 	void operator=(const CellData &p_other) {
 		coords = p_other.coords;
 		cell = p_other.cell;
+		modulate = p_other.modulate;
 		occluders = p_other.occluders;
 		bodies = p_other.bodies;
 		navigation_regions = p_other.navigation_regions;
@@ -138,6 +140,7 @@ struct CellData {
 			dirty_list_element(this) {
 		coords = p_other.coords;
 		cell = p_other.cell;
+		modulate = p_other.modulate;
 		occluders = p_other.occluders;
 		bodies = p_other.bodies;
 		navigation_regions = p_other.navigation_regions;
@@ -372,7 +375,8 @@ public:
 	// --- Exposed in TileMap ---
 
 	// Cells manipulation.
-	void set_cell(const Vector2i &p_coords, int p_source_id = TileSet::INVALID_SOURCE, const Vector2i p_atlas_coords = TileSetSource::INVALID_ATLAS_COORDS, int p_alternative_tile = 0);
+	void set_cell(const Vector2i &p_coords, int p_source_id = TileSet::INVALID_SOURCE, const Vector2i p_atlas_coords = TileSetSource::INVALID_ATLAS_COORDS, int p_alternative_tile = 0, const Color p_cell_modulate = Color(1, 1, 1));
+	void set_cell_modulate(const Vector2i &p_coords, const Color &p_cell_modulate);
 	void erase_cell(const Vector2i &p_coords);
 
 	int get_cell_source_id(const Vector2i &p_coords, bool p_use_proxies = false) const;
@@ -496,7 +500,7 @@ public:
 	void set_rendering_quadrant_size(int p_size);
 	int get_rendering_quadrant_size() const;
 
-	static void draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, int p_frame = -1, Color p_modulation = Color(1.0, 1.0, 1.0, 1.0), const TileData *p_tile_data_override = nullptr, real_t p_animation_offset = 0.0);
+	static void draw_tile(RID p_canvas_item, const Vector2 &p_position, const Ref<TileSet> p_tile_set, int p_atlas_source_id, const Vector2i &p_atlas_coords, int p_alternative_tile, const CellData *p_cell_data, int p_frame = -1, Color p_modulation = Color(1.0, 1.0, 1.0, 1.0), const TileData *p_tile_data_override = nullptr, real_t p_animation_offset = 0.0);
 
 	// Layers management.
 	int get_layers_count() const;
@@ -534,7 +538,8 @@ public:
 	VisibilityMode get_navigation_visibility_mode();
 
 	// Cells accessors.
-	void set_cell(int p_layer, const Vector2i &p_coords, int p_source_id = TileSet::INVALID_SOURCE, const Vector2i p_atlas_coords = TileSetSource::INVALID_ATLAS_COORDS, int p_alternative_tile = 0);
+	void set_cell(int p_layer, const Vector2i &p_coords, int p_source_id = TileSet::INVALID_SOURCE, const Vector2i p_atlas_coords = TileSetSource::INVALID_ATLAS_COORDS, int p_alternative_tile = 0, const Color p_cell_modulate = Color(1, 1, 1));
+	void set_cell_modulate(int p_layer, const Vector2i &p_coords, const Color &p_cell_modulate);
 	void erase_cell(int p_layer, const Vector2i &p_coords);
 	int get_cell_source_id(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;
 	Vector2i get_cell_atlas_coords(int p_layer, const Vector2i &p_coords, bool p_use_proxies = false) const;

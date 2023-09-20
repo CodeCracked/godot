@@ -2056,8 +2056,6 @@ void TileMapLayer::set_cell_modulate(const Vector2i& p_coords, const Color& p_ce
 		dirty.cell_list.add(&(E->value.dirty_list_element));
 	}
 	tile_map_node->queue_internal_update();
-
-	used_rect_cache_dirty = true;
 }
 
 void TileMapLayer::erase_cell(const Vector2i &p_coords) {
